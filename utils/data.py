@@ -26,25 +26,74 @@ TICKER_COLORS = {ticker: COLORS[NAME_MAP[ticker]] for ticker in TICKERS}
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "individual_stocks_5yr"
+COMBINED_DATA_FILE = BASE_DIR / "data" / "stock_prices.csv"
+STOOQ_URL = "https://stooq.com/q/d/l/?s={symbol}.us&i=d"
+
+
+def _load_combined_csv() -> pd.DataFrame | None:
+    if not COMBINED_DATA_FILE.exists():
+        return None
+
+    df = pd.read_csv(COMBINED_DATA_FILE)
+    df.columns = df.columns.str.strip().str.lower()
+    return df
+
+
+def _load_local_csv(ticker: str) -> pd.DataFrame | None:
+    fpath = DATA_DIR / f"{ticker}_data.csv"
+    if not fpath.exists():
+        return None
+
+    df = pd.read_csv(fpath)
+    df.columns = df.columns.str.strip().str.lower()
+    return df
+
+
+def _load_remote_history(ticker: str) -> pd.DataFrame:
+    url = STOOQ_URL.format(symbol=ticker.lower())
+    df = pd.read_csv(url)
+    df.columns = df.columns.str.strip().str.lower()
+
+    if df.empty:
+        raise ValueError(f"No rows returned for {ticker}")
+
+    df["date"] = pd.to_datetime(df["date"])
+    cutoff = pd.Timestamp.today().normalize() - pd.DateOffset(years=5)
+    return df[df["date"] >= cutoff].copy()
 
 
 @st.cache_data(show_spinner=False)
 def load_data() -> pd.DataFrame:
-    """Load all ticker CSVs and return a unified long-form dataframe."""
-    frames = []
+    """Load ticker data from the packaged dataset, local CSVs, or online history."""
+    combined_csv = _load_combined_csv()
     required_cols = {"date", "open", "high", "low", "close", "volume"}
 
-    for ticker in TICKERS:
-        fpath = DATA_DIR / f"{ticker}_data.csv"
-        if not fpath.exists():
-            st.error(
-                f"Data file not found: `{fpath}`. "
-                "Please keep the `individual_stocks_5yr/` folder next to `app.py`."
-            )
+    if combined_csv is not None:
+        missing = (required_cols | {"name"}) - set(combined_csv.columns)
+        if missing:
+            st.error(f"Combined dataset is missing required columns: {missing}")
             st.stop()
+            raise RuntimeError(f"Combined dataset is missing required columns: {missing}")
 
-        df = pd.read_csv(fpath)
-        df.columns = df.columns.str.strip().str.lower()
+        combined_csv["date"] = pd.to_datetime(combined_csv["date"])
+        combined_csv = combined_csv[combined_csv["name"].isin(TICKERS)].copy()
+        combined_csv["company"] = combined_csv["name"].map(NAME_MAP)
+        return combined_csv.sort_values(["name", "date"]).reset_index(drop=True)
+
+    frames = []
+    for ticker in TICKERS:
+        df = _load_local_csv(ticker)
+        if df is None:
+            try:
+                df = _load_remote_history(ticker)
+            except Exception as exc:
+                message = (
+                    f"Could not load {ticker} stock history from local CSVs or Stooq. "
+                    f"Details: {exc}"
+                )
+                st.error(message)
+                st.stop()
+                raise RuntimeError(message) from exc
 
         if "name" not in df.columns:
             df["name"] = ticker

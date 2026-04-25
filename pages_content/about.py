@@ -6,6 +6,18 @@ import streamlit as st
 
 def _profile_data_uri() -> str:
     profile_path = Path(__file__).resolve().parents[1] / "assets" / "profile.jpg"
+    if not profile_path.exists():
+        svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+          <rect width="240" height="240" rx="120" fill="#0f1e3d"/>
+          <circle cx="120" cy="92" r="46" fill="#38bdf8"/>
+          <path d="M48 216c13-48 40-72 72-72s59 24 72 72" fill="#a78bfa"/>
+          <text x="120" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="46" font-weight="700" fill="#ffffff">M</text>
+        </svg>
+        """.strip()
+        encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+        return f"data:image/svg+xml;base64,{encoded}"
+
     encoded = base64.b64encode(profile_path.read_bytes()).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}"
 
@@ -84,7 +96,7 @@ def render():
 
     st.markdown("#### Methodology Summary")
     steps = [
-        ("01", "Data Collection", "Five years of daily OHLCV data for AAPL, AMZN, GOOG, and MSFT loaded from individual CSV files."),
+        ("01", "Data Collection", "Five years of daily OHLCV data for AAPL, AMZN, GOOG, and MSFT loaded from a compact packaged CSV for deployment."),
         ("02", "Preprocessing", "Date parsing, column normalisation, sort ordering, and deduplication applied per ticker."),
         ("03", "Feature Engineering", "Daily returns (pct_change), rolling moving averages (MA10-MA200), and signal columns computed per ticker with no cross-ticker leakage."),
         ("04", "Alignment", "All comparative metrics are restricted to the common overlapping date range across all tickers for fairness."),
@@ -149,11 +161,10 @@ stock_dashboard/
 |   |-- strategy.py           # Strategy and Backtesting
 |   |-- insights.py           # Key Insights
 |   `-- about.py              # About Project
-`-- individual_stocks_5yr/
-    |-- AAPL_data.csv
-    |-- AMZN_data.csv
-    |-- GOOG_data.csv
-    `-- MSFT_data.csv
+|-- data/
+|   `-- stock_prices.csv      # Compact deployment dataset
+|-- Procfile                  # Heroku web process
+`-- .python-version           # Python runtime hint
             """.strip(),
             language="text",
         )
@@ -164,9 +175,8 @@ stock_dashboard/
         <div class="insight-box-label">Reproducibility Note</div>
         <p>
         All data loading uses <code>pathlib.Path</code> for OS-portable relative paths.
-        Place the <code>individual_stocks_5yr/</code> folder in the same directory as
-        <code>app.py</code> and run <code>streamlit run app.py</code>.
-        No absolute paths or environment-specific configurations are required.
+        The dashboard packages only the four required ticker histories in one compact CSV,
+        keeping the GitHub repository lightweight while avoiding runtime data-download failures.
         </p>
     </div>
     """,

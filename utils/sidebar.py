@@ -19,6 +19,18 @@ NAV_PAGES = [
 
 def _profile_data_uri() -> str:
     profile_path = Path(__file__).resolve().parents[1] / "assets" / "profile.jpg"
+    if not profile_path.exists():
+        svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+          <rect width="160" height="160" rx="80" fill="#0f1e3d"/>
+          <circle cx="80" cy="62" r="30" fill="#38bdf8"/>
+          <path d="M32 142c8-31 26-46 48-46s40 15 48 46" fill="#a78bfa"/>
+          <text x="80" y="87" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">M</text>
+        </svg>
+        """.strip()
+        encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+        return f"data:image/svg+xml;base64,{encoded}"
+
     encoded = base64.b64encode(profile_path.read_bytes()).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}"
 
